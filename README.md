@@ -11,6 +11,7 @@ A comprehensive web application built with Express.js, Prisma ORM, PostgreSQL, a
 ✅ **Complex Queries** - Advanced queries with joins, aggregations, and window functions  
 ✅ **Database Indexing** - Optimized indexes for improved query performance  
 ✅ **Data Seeding** - Seed script for generating 100,000 records per table  
+✅ **Rate Limiting** - API rate limiting to prevent abuse and brute force attacks
 
 ## Technology Stack
 
@@ -20,6 +21,7 @@ A comprehensive web application built with Express.js, Prisma ORM, PostgreSQL, a
 - **Authentication**: JWT (JSON Web Tokens)
 - **Password Hashing**: bcryptjs
 - **Validation**: express-validator
+- **Rate Limiting**: express-rate-limit
 
 ## Project Structure
 
@@ -38,7 +40,8 @@ student-management-system/
 │   │   ├── resultController.js
 │   │   └── queryController.js # Complex queries
 │   ├── middleware/
-│   │   └── auth.js            # JWT authentication middleware
+│   │   ├── auth.js            # JWT authentication middleware
+│   │   └── rateLimiter.js     # Rate limiting middleware
 │   ├── routes/
 │   │   ├── authRoutes.js
 │   │   ├── instituteRoutes.js
@@ -47,10 +50,9 @@ student-management-system/
 │   │   ├── resultRoutes.js
 │   │   └── queryRoutes.js
 │   ├── index.js               # Application entry point
-│   └── seed.js               # Database seeding script
+│   └── seed.js               # Database seeding 
 ├── .env                      # Environment variables
 ├── package.json
-├── JWT_BEST_PRACTICES.md     # JWT security guide
 └── README.md                 # This file
 ```
 
@@ -527,8 +529,8 @@ LIMIT 10
 3. **Role-Based Access Control** - Different access levels for different user roles
 4. **Input Validation** - Request validation using express-validator
 5. **SQL Injection Prevention** - Prisma ORM provides built-in protection
+6. **Rate Limiting** - Protection against brute force attacks and API abuse
 
-See [JWT_BEST_PRACTICES.md](JWT_BEST_PRACTICES.md) for detailed security guidelines.
 
 ## Development
 
@@ -590,6 +592,12 @@ curl http://localhost:3000/api/queries/institute-performance
 - Check token expiration time
 - Ensure token is sent in Authorization header
 
+### Production URL
+
+The application is deployed and available at:
+- **API**: http://34.171.199.43
+- **Health Check**: http://34.171.199.43/health
+
 ## Contributing
 
 1. Fork the repository
@@ -597,6 +605,10 @@ curl http://localhost:3000/api/queries/institute-performance
 3. Make your changes
 4. Run tests
 5. Submit a pull request
+
+## Documentation
+
+- [README.md](README.md) - This file (project overview and API documentation)
 
 ## License
 
