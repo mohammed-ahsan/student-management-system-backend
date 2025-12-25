@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Institute {
+  id        Int       @id @default(autoincrement())
+  name      String
+  address   String
+  contact   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  students  Student[]
+  results   Result[]
+
+  @@index([name])
+  @@index([id])
+}
+
+model Student {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String
+  instituteId Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  institute   Institute @relation(fields: [instituteId], references: [id])
+  results     Result[]
+
+  @@index([instituteId])
+  @@index([email])
+  @@index([id])
+}
+
+model Course {
+  id        Int       @id @default(autoincrement())
+  name      String
+  code      String
+  credits   Int
+  year      Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  results   Result[]
+
+  @@index([name])
+  @@index([code])
+  @@index([year])
+  @@index([id])
+}
+
+model Result {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  courseId    Int
+  instituteId Int
+  score       Float
+  grade       String
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student     Student  @relation(fields: [studentId], references: [id])
+  course      Course   @relation(fields: [courseId], references: [id])
+  institute   Institute @relation(fields: [instituteId], references: [id])
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([instituteId])
+  @@index([score])
+  @@index([year])
+  @@index([grade])
+  @@index([studentId, courseId])
+  @@index([instituteId, year])
+}
