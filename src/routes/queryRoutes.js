@@ -7,7 +7,6 @@ const {
   getInstitutePerformance,
   getCourseGradeDistribution
 } = require('../controllers/queryController');
-const { authenticateToken } = require('../middleware/auth');
 
 // All query routes are public for demonstration purposes
 // In production, you might want to protect some of these

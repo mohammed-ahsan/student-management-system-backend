@@ -1,5 +1,14 @@
 const jwt = require('jsonwebtoken');
 
+const generateDeviceFingerprint = (userAgent) => {
+  const crypto = require('crypto');
+  return crypto
+    .createHash('sha256')
+    .update(userAgent || '')
+    .digest('hex')
+    .substring(0, 32);
+};
+
 /**
  * JWT Authentication Middleware
  * Verifies JWT token and attaches user info to request
@@ -19,6 +28,16 @@ const authenticateToken = (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    const currentDeviceFingerprint = generateDeviceFingerprint(req.headers['user-agent']);
+    
+    if (decoded.deviceId !== currentDeviceFingerprint) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid device. Please login again from this device.' 
+      });
+    }
+    
     req.user = decoded;
     next();
   } catch (error) {

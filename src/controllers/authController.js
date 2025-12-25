@@ -1,16 +1,70 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { prisma } = require('../config/database');
+
+const generateDeviceFingerprint = (userAgent) => {
+  return crypto
+    .createHash('sha256')
+    .update(userAgent || '')
+    .digest('hex')
+    .substring(0, 32);
+};
+
+const getDeviceInfo = (req) => {
+  const userAgent = req.headers['user-agent'] || '';
+  let deviceName = 'Unknown Device';
+  let deviceType = 'desktop';
+
+  if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+    deviceType = 'mobile';
+    if (userAgent.includes('iPhone')) {
+      deviceName = 'iPhone';
+    } else if (userAgent.includes('iPad')) {
+      deviceName = 'iPad';
+    } else if (userAgent.includes('Android')) {
+      deviceName = 'Android Device';
+    } else {
+      deviceName = 'Mobile Device';
+    }
+  } else if (userAgent.includes('Mac') || userAgent.includes('Windows') || userAgent.includes('Linux')) {
+    deviceType = 'desktop';
+    if (userAgent.includes('Mac')) {
+      deviceName = 'Macintosh';
+    } else if (userAgent.includes('Windows')) {
+      deviceName = 'Windows PC';
+    } else if (userAgent.includes('Linux')) {
+      deviceName = 'Linux PC';
+    }
+  } else if (userAgent.includes('Tablet')) {
+    deviceType = 'tablet';
+    deviceName = 'Tablet';
+  }
+
+  const deviceId = generateDeviceFingerprint(userAgent);
+
+  return { deviceName, deviceType, deviceId };
+};
 
 /**
  * Generate JWT Token
  */
-const generateToken = (userId, email, role) => {
+const generateAccessToken = (userId, email, role, deviceId) => {
   return jwt.sign(
-    { userId, email, role },
+    { userId, email, role, deviceId },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
+};
+
+const generateRefreshToken = () => {
+  return crypto.randomBytes(64).toString('hex');
+};
+
+const calculateRefreshTokenExpiry = () => {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + (process.env.JWT_REFRESH_EXPIRES_IN || 7));
+  return expiresAt;
 };
 
 /**
@@ -55,8 +109,23 @@ const signup = async (req, res) => {
       }
     });
 
+    const { deviceName, deviceType, deviceId } = getDeviceInfo(req);
+
     // Generate token
-    const token = generateToken(user.id, user.email, user.role);
+    const accessToken = generateAccessToken(user.id, user.email, user.role, deviceId);
+    const refreshToken = generateRefreshToken();
+    const refreshTokenExpiresAt = calculateRefreshTokenExpiry();
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        deviceId,
+        deviceName,
+        deviceType,
+        expiresAt: refreshTokenExpiresAt
+      }
+    });
 
     res.status(201).json({
       success: true,
@@ -68,7 +137,8 @@ const signup = async (req, res) => {
           name: user.name,
           role: user.role
         },
-        token
+        accessToken,
+        refreshToken
       }
     });
   } catch (error) {
@@ -119,8 +189,23 @@ const signin = async (req, res) => {
       });
     }
 
+    const { deviceName, deviceType, deviceId } = getDeviceInfo(req);
+
     // Generate token
-    const token = generateToken(user.id, user.email, user.role);
+    const accessToken = generateAccessToken(user.id, user.email, user.role, deviceId);
+    const refreshToken = generateRefreshToken();
+    const refreshTokenExpiresAt = calculateRefreshTokenExpiry();
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        deviceId,
+        deviceName,
+        deviceType,
+        expiresAt: refreshTokenExpiresAt
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -132,7 +217,8 @@ const signin = async (req, res) => {
           name: user.name,
           role: user.role
         },
-        token
+        accessToken,
+        refreshToken
       }
     });
   } catch (error) {
@@ -176,8 +262,152 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
+const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken: providedRefreshToken } = req.body;
+
+    if (!providedRefreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refresh token is required'
+      });
+    }
+
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { token: providedRefreshToken },
+      include: { user: true }
+    });
+
+    if (!storedToken) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid refresh token'
+      });
+    }
+
+    if (storedToken.revoked) {
+      return res.status(401).json({
+        success: false,
+        message: 'Refresh token has been revoked'
+      });
+    }
+
+    if (new Date() > storedToken.expiresAt) {
+      await prisma.refreshToken.delete({
+        where: { id: storedToken.id }
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Refresh token has expired'
+      });
+    }
+
+    const newAccessToken = generateAccessToken(
+      storedToken.user.id,
+      storedToken.user.email,
+      storedToken.user.role,
+      storedToken.deviceId
+    );
+    const newRefreshToken = generateRefreshToken();
+    const newRefreshTokenExpiresAt = calculateRefreshTokenExpiry();
+
+    await prisma.$transaction([
+      prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: {
+          revoked: true,
+          replacedByToken: newRefreshToken
+        }
+      }),
+      prisma.refreshToken.create({
+        data: {
+          token: newRefreshToken,
+          userId: storedToken.user.id,
+          deviceId: storedToken.deviceId,
+          deviceName: storedToken.deviceName,
+          deviceType: storedToken.deviceType,
+          expiresAt: newRefreshTokenExpiresAt
+        }
+      })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+      }
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const logout = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const deviceId = req.user.deviceId;
+
+    await prisma.refreshToken.updateMany({
+      where: {
+        userId: userId,
+        deviceId: deviceId,
+        revoked: false
+      },
+      data: { revoked: true }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const logoutAll = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    await prisma.refreshToken.updateMany({
+      where: {
+        userId: userId,
+        revoked: false
+      },
+      data: { revoked: true }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out from all devices successfully'
+    });
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   signup,
   signin,
-  getCurrentUser
+  getCurrentUser,
+  refreshToken,
+  logout,
+  logoutAll
 };
