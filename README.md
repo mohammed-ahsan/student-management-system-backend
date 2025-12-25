@@ -4,7 +4,8 @@ A comprehensive web application built with Express.js, Prisma ORM, PostgreSQL, a
 
 ## Features
 
-✅ **JWT Authentication** - Secure user authentication with role-based access control  
+✅ **JWT Authentication** - Secure user authentication with access tokens  
+✅ **Refresh Token System** - Token rotation with device fingerprinting for enhanced security  
 ✅ **PostgreSQL Database** - Relational database with Prisma ORM  
 ✅ **CRUD Operations** - Full Create, Read, Update, Delete for all entities  
 ✅ **Pagination** - Efficient data retrieval with pagination support  
@@ -63,23 +64,29 @@ student-management-system/
 1. **User** - Authentication users
    - id, email, password, name, role, timestamps
    - Indexes: email
+   - Relations: refreshTokens
 
-2. **Institute** - Educational institutions
+2. **RefreshToken** - Session management tokens
+   - id, token, userId, deviceId, deviceName, deviceType, expiresAt, createdAt, revoked, replacedByToken
+   - Indexes: token, userId, deviceId, expiresAt
+   - Relations: user
+
+3. **Institute** - Educational institutions
    - id, name, address, contact, timestamps
    - Indexes: name, id
    - Relations: students, results
 
-3. **Student** - Student records
+4. **Student** - Student records
    - id, name, email, instituteId, timestamps
    - Indexes: instituteId, email, id
    - Relations: institute, results
 
-4. **Course** - Course offerings
+5. **Course** - Course offerings
    - id, name, code, credits, year, timestamps
    - Indexes: name, code, year, id
    - Relations: results
 
-5. **Result** - Student exam results
+6. **Result** - Student exam results
    - id, studentId, courseId, instituteId, score, grade, year, timestamps
    - Indexes: studentId, courseId, instituteId, score, year, grade, (studentId, courseId), (instituteId, year)
    - Relations: student, course, institute
@@ -116,7 +123,7 @@ student-management-system/
    
    # JWT Configuration
    JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
-   JWT_EXPIRES_IN="7d"
+   JWT_EXPIRES_IN="15m"
    
    # Server Configuration
    PORT=3000
@@ -153,229 +160,6 @@ student-management-system/
    ```bash
    curl http://localhost:3000/health
    ```
-
-## API Documentation
-
-### Base URL
-```
-http://localhost:3000
-```
-
-### Authentication Endpoints
-
-#### Signup
-```http
-POST /api/auth/signup
-Content-Type: application/json
-
-{
-  "email": "admin@example.com",
-  "password": "admin123",
-  "name": "Admin User",
-  "role": "admin"
-}
-```
-
-#### Signin
-```http
-POST /api/auth/signin
-Content-Type: application/json
-
-{
-  "email": "admin@example.com",
-  "password": "admin123"
-}
-```
-
-#### Get Current User
-```http
-GET /api/auth/me
-Authorization: Bearer <token>
-```
-
-### Institute Endpoints
-
-#### Get All Institutes (with pagination)
-```http
-GET /api/institutes?page=1&limit=10
-```
-
-#### Get Institute by ID
-```http
-GET /api/institutes/:id
-```
-
-#### Create Institute
-```http
-POST /api/institutes
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Tech Institute",
-  "address": "123 Main St, City",
-  "contact": "+1234567890"
-}
-```
-
-#### Update Institute
-```http
-PUT /api/institutes/:id
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Updated Institute Name",
-  "address": "456 New St, City",
-  "contact": "+0987654321"
-}
-```
-
-#### Delete Institute
-```http
-DELETE /api/institutes/:id
-Authorization: Bearer <token>
-```
-
-### Student Endpoints
-
-#### Get All Students (with pagination)
-```http
-GET /api/students?page=1&limit=10
-```
-
-#### Get Student by ID
-```http
-GET /api/students/:id
-```
-
-#### Create Student
-```http
-POST /api/students
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "instituteId": 1
-}
-```
-
-#### Update Student
-```http
-PUT /api/students/:id
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "instituteId": 2
-}
-```
-
-#### Delete Student
-```http
-DELETE /api/students/:id
-Authorization: Bearer <token>
-```
-
-### Course Endpoints
-
-#### Get All Courses (with pagination)
-```http
-GET /api/courses?page=1&limit=10
-```
-
-#### Get Course by ID
-```http
-GET /api/courses/:id
-```
-
-#### Create Course
-```http
-POST /api/courses
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Introduction to Programming",
-  "code": "CS101",
-  "credits": 3,
-  "year": 2024
-}
-```
-
-#### Update Course
-```http
-PUT /api/courses/:id
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "name": "Advanced Programming",
-  "code": "CS201",
-  "credits": 4,
-  "year": 2024
-}
-```
-
-#### Delete Course
-```http
-DELETE /api/courses/:id
-Authorization: Bearer <token>
-```
-
-### Result Endpoints
-
-#### Get All Results (with pagination)
-```http
-GET /api/results?page=1&limit=10
-```
-
-#### Get Result by ID
-```http
-GET /api/results/:id
-```
-
-#### Create Result
-```http
-POST /api/results
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "studentId": 1,
-  "courseId": 1,
-  "instituteId": 1,
-  "score": 85.5,
-  "grade": "B",
-  "year": 2024
-}
-```
-
-#### Update Result
-```http
-PUT /api/results/:id
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{
-  "studentId": 2,
-  "courseId": 2,
-  "instituteId": 1,
-  "score": 92.0,
-  "grade": "A",
-  "year": 2024
-}
-```
-
-#### Delete Result
-```http
-DELETE /api/results/:id
-Authorization: Bearer <token>
-```
 
 ### Complex Query Endpoints
 
@@ -485,51 +269,16 @@ After running the seed script, you can use these credentials for testing:
 - Email: user@example.com
 - Password: user123
 
-## Complex Queries Examples
-
-### 1. Institute Results with Joins
-```sql
-SELECT r.*, s.name as student_name, c.name as course_name
-FROM Result r
-JOIN Student s ON r.studentId = s.id
-JOIN Course c ON r.courseId = c.id
-WHERE r.instituteId = $1
-ORDER BY r.score DESC
-LIMIT 10 OFFSET 0
-```
-
-### 2. Top Courses by Year with Aggregation
-```sql
-SELECT c.id, c.name, COUNT(r.id) as enrollment_count, AVG(r.score) as average_score
-FROM Course c
-INNER JOIN Result r ON c.id = r.courseId
-WHERE c.year = 2024
-GROUP BY c.id, c.name
-ORDER BY enrollment_count DESC
-LIMIT 10
-```
-
-### 3. Top Students with Window Functions
-```sql
-SELECT s.name, i.name as institute_name,
-       AVG(r.score) as average_score,
-       RANK() OVER (ORDER BY AVG(r.score) DESC) as rank_position
-FROM Student s
-INNER JOIN Result r ON s.id = r.studentId
-INNER JOIN Institute i ON s.instituteId = i.id
-GROUP BY s.id, s.name, i.name
-ORDER BY average_score DESC
-LIMIT 10
-```
-
 ## Security Features
 
 1. **Password Hashing** - All passwords are hashed using bcrypt with salt rounds
-2. **JWT Authentication** - Secure token-based authentication
-3. **Role-Based Access Control** - Different access levels for different user roles
-4. **Input Validation** - Request validation using express-validator
-5. **SQL Injection Prevention** - Prisma ORM provides built-in protection
-6. **Rate Limiting** - Protection against brute force attacks and API abuse
+2. **JWT Authentication** - Secure token-based authentication with short-lived access tokens (15 minutes)
+3. **Refresh Token System** - Token rotation with device fingerprinting for enhanced session security
+4. **Role-Based Access Control** - Different access levels for different user roles
+5. **Input Validation** - Request validation using express-validator
+6. **SQL Injection Prevention** - Prisma ORM provides built-in protection
+7. **Rate Limiting** - Protection against brute force attacks and API abuse
+
 
 
 ## Development

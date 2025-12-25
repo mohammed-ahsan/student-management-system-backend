@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const prisma = new PrismaClient();
 const BATCH_SIZE = 1000;
@@ -140,7 +141,7 @@ async function seedUsers() {
   const hashedPassword = await bcrypt.hash('admin123', salt);
   
   // Create admin user
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
     update: {},
     create: {
@@ -153,7 +154,7 @@ async function seedUsers() {
   
   // Create regular test user
   const regularPassword = await bcrypt.hash('user123', salt);
-  await prisma.user.upsert({
+  const regularUser = await prisma.user.upsert({
     where: { email: 'user@example.com' },
     update: {},
     create: {
@@ -164,7 +165,39 @@ async function seedUsers() {
     }
   });
   
-  console.log('✅ Users seeded successfully\n');
+  console.log('🔄 Seeding Refresh Tokens...');
+  
+  const now = new Date();
+  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  
+  const adminToken = crypto.randomBytes(64).toString('hex');
+  await prisma.refreshToken.create({
+    data: {
+      token: adminToken,
+      userId: admin.id,
+      deviceId: crypto.createHash('sha256').update('AdminDevice/1.0').digest('hex'),
+      deviceName: 'Admin Device',
+      deviceType: 'Desktop',
+      expiresAt: sevenDaysLater,
+      revoked: false
+    }
+  });
+  
+  const userToken = crypto.randomBytes(64).toString('hex');
+  await prisma.refreshToken.create({
+    data: {
+      token: userToken,
+      userId: regularUser.id,
+      deviceId: crypto.createHash('sha256').update('UserDevice/1.0').digest('hex'),
+      deviceName: 'User Device',
+      deviceType: 'Desktop',
+      expiresAt: sevenDaysLater,
+      revoked: false
+    }
+  });
+  
+  console.log('✅ Users seeded successfully');
+  console.log('✅ Refresh Tokens seeded successfully\n');
 }
 
 // Main seed function
@@ -175,6 +208,7 @@ async function main() {
   try {
     // Clear existing data
     console.log('🗑️  Clearing existing data...');
+    await prisma.refreshToken.deleteMany({});
     await prisma.result.deleteMany({});
     await prisma.student.deleteMany({});
     await prisma.course.deleteMany({});
