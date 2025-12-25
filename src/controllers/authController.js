@@ -63,7 +63,8 @@ const generateRefreshToken = () => {
 
 const calculateRefreshTokenExpiry = () => {
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (process.env.JWT_REFRESH_EXPIRES_IN || 7));
+  const expiresInDays = parseInt(process.env.JWT_REFRESH_EXPIRES_IN || '7', 10);
+  expiresAt.setDate(expiresAt.getDate() + expiresInDays);
   return expiresAt;
 };
 
@@ -292,7 +293,8 @@ const refreshToken = async (req, res) => {
       });
     }
 
-    if (new Date() > storedToken.expiresAt) {
+    const now = new Date();
+    if (now > storedToken.expiresAt) {
       await prisma.refreshToken.delete({
         where: { id: storedToken.id }
       });
