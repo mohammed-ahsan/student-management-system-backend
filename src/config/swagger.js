@@ -16,10 +16,6 @@ const options = {
       {
         url: 'http://localhost:3000',
         description: 'Development server'
-      },
-      {
-        url: process.env.API_URL || 'https://api.example.com',
-        description: 'Production server'
       }
     ],
     components: {
