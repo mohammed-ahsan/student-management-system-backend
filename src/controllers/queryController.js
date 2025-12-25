@@ -82,10 +82,20 @@ const getTopCoursesByYear = async (req, res) => {
       ORDER BY enrollment_count DESC
       LIMIT ${limit}
     `;
+    
+    const serializedCourses = topCourses.map(course => ({
+      ...course,
+      id: Number(course.id),
+      enrollment_count: Number(course.enrollment_count),
+      credits: Number(course.credits),
+      year: Number(course.year),
+      max_score: Number(course.max_score),
+      min_score: Number(course.min_score)
+    }));
 
     res.status(200).json({
       success: true,
-      data: topCourses,
+      data: serializedCourses,
       year
     });
   } catch (error) {
@@ -108,39 +118,65 @@ const getTopRankingStudents = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const year = req.query.year ? parseInt(req.query.year) : undefined;
 
-    let whereClause = '';
-    const params = { limit };
-
+    let topStudents;
+    
     if (year) {
-      whereClause = 'WHERE r.year = $2';
-      params.year = year;
-    }
-
+      topStudents = await prisma.$queryRaw`
+        SELECT 
+          s.id,
+          s.name,
+          s.email,
+          i.name as institute_name,
+          COUNT(r.id) as total_courses,
+          AVG(r.score) as average_score,
+          SUM(r.score) as total_score,
+          MAX(r.score) as highest_score,
+          MIN(r.score) as lowest_score,
+          RANK() OVER (ORDER BY AVG(r.score) DESC) as rank_position
+        FROM "Student" s
+        INNER JOIN "Result" r ON s.id = r."studentId"
+        INNER JOIN "Institute" i ON s."instituteId" = i.id
+        WHERE r.year = ${year}
+        GROUP BY s.id, s.name, s.email, i.name
+        ORDER BY average_score DESC
+        LIMIT ${limit}
+      `;
+    } else {
     // Using raw SQL for complex ranking query
-    const topStudents = await prisma.$queryRawUnsafe(`
-      SELECT 
-        s.id,
-        s.name,
-        s.email,
-        i.name as institute_name,
-        COUNT(r.id) as total_courses,
-        AVG(r.score) as average_score,
-        SUM(r.score) as total_score,
-        MAX(r.score) as highest_score,
-        MIN(r.score) as lowest_score,
-        RANK() OVER (ORDER BY AVG(r.score) DESC) as rank_position
-      FROM "Student" s
-      INNER JOIN "Result" r ON s.id = r."studentId"
-      INNER JOIN "Institute" i ON s."instituteId" = i.id
-      ${whereClause}
-      GROUP BY s.id, s.name, s.email, i.name
-      ORDER BY average_score DESC
-      LIMIT $1
-    `, params.limit, year || undefined);
+      topStudents = await prisma.$queryRaw`
+        SELECT 
+          s.id,
+          s.name,
+          s.email,
+          i.name as institute_name,
+          COUNT(r.id) as total_courses,
+          AVG(r.score) as average_score,
+          SUM(r.score) as total_score,
+          MAX(r.score) as highest_score,
+          MIN(r.score) as lowest_score,
+          RANK() OVER (ORDER BY AVG(r.score) DESC) as rank_position
+        FROM "Student" s
+        INNER JOIN "Result" r ON s.id = r."studentId"
+        INNER JOIN "Institute" i ON s."instituteId" = i.id
+        GROUP BY s.id, s.name, s.email, i.name
+        ORDER BY average_score DESC
+        LIMIT ${limit}
+      `;
+    }
+    
+    const serializedStudents = topStudents.map(student => ({
+      ...student,
+      id: Number(student.id),
+      total_courses: Number(student.total_courses),
+      total_score: Number(student.total_score),
+      highest_score: Number(student.highest_score),
+      lowest_score: Number(student.lowest_score),
+      rank_position: Number(student.rank_position)
+    }));
 
     res.status(200).json({
       success: true,
-      data: topStudents,
+      data: serializedStudents,
       ...(year && { year })
     });
   } catch (error) {
@@ -162,38 +198,64 @@ const getInstitutePerformance = async (req, res) => {
   try {
     const year = req.query.year ? parseInt(req.query.year) : undefined;
 
-    let whereClause = '';
-    const params = {};
-
+    let instituteStats;
+    
     if (year) {
-      whereClause = 'WHERE r.year = $1';
-      params.year = year;
+      instituteStats = await prisma.$queryRaw`
+        SELECT 
+          i.id,
+          i.name,
+          i.address,
+          i.contact,
+          COUNT(DISTINCT s.id) as total_students,
+          COUNT(DISTINCT r."courseId") as total_courses_offered,
+          COUNT(r.id) as total_results,
+          AVG(r.score) as average_score,
+          MAX(r.score) as highest_score,
+          MIN(r.score) as lowest_score,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.score) as median_score
+        FROM "Institute" i
+        LEFT JOIN "Student" s ON i.id = s."instituteId"
+        LEFT JOIN "Result" r ON s.id = r."studentId"
+        WHERE r.year = ${year}
+        GROUP BY i.id, i.name, i.address, i.contact
+        ORDER BY average_score DESC
+      `;
+    } else {
+      instituteStats = await prisma.$queryRaw`
+        SELECT 
+          i.id,
+          i.name,
+          i.address,
+          i.contact,
+          COUNT(DISTINCT s.id) as total_students,
+          COUNT(DISTINCT r."courseId") as total_courses_offered,
+          COUNT(r.id) as total_results,
+          AVG(r.score) as average_score,
+          MAX(r.score) as highest_score,
+          MIN(r.score) as lowest_score,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.score) as median_score
+        FROM "Institute" i
+        LEFT JOIN "Student" s ON i.id = s."instituteId"
+        LEFT JOIN "Result" r ON s.id = r."studentId"
+        GROUP BY i.id, i.name, i.address, i.contact
+        ORDER BY average_score DESC
+      `;
     }
-
-    const instituteStats = await prisma.$queryRawUnsafe(`
-      SELECT 
-        i.id,
-        i.name,
-        i.address,
-        i.contact,
-        COUNT(DISTINCT s.id) as total_students,
-        COUNT(DISTINCT r."courseId") as total_courses_offered,
-        COUNT(r.id) as total_results,
-        AVG(r.score) as average_score,
-        MAX(r.score) as highest_score,
-        MIN(r.score) as lowest_score,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.score) as median_score
-      FROM "Institute" i
-      LEFT JOIN "Student" s ON i.id = s."instituteId"
-      LEFT JOIN "Result" r ON s.id = r."studentId"
-      ${whereClause}
-      GROUP BY i.id, i.name, i.address, i.contact
-      ORDER BY average_score DESC
-    `, year || undefined);
+    
+    const serializedStats = instituteStats.map(stat => ({
+      ...stat,
+      id: Number(stat.id),
+      total_students: Number(stat.total_students),
+      total_courses_offered: Number(stat.total_courses_offered),
+      total_results: Number(stat.total_results),
+      highest_score: Number(stat.highest_score),
+      lowest_score: Number(stat.lowest_score)
+    }));
 
     res.status(200).json({
       success: true,
-      data: instituteStats,
+      data: serializedStats,
       ...(year && { year })
     });
   } catch (error) {

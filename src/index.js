@@ -2,6 +2,10 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { testConnection } = require('./config/database');
+const swaggerUi = require('swagger-ui-express');
+const specs = require('./config/swagger');
+
+const { authLimiter, writeLimiter, readLimiter } = require('./middleware/rateLimiter');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -19,6 +23,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Student Management System API Docs'
+}));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -29,12 +39,14 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/institutes', instituteRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/results', resultRoutes);
-app.use('/api/queries', queryRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+
+app.use('/api/institutes', writeLimiter, instituteRoutes);
+app.use('/api/students', writeLimiter, studentRoutes);
+app.use('/api/courses', writeLimiter, courseRoutes);
+app.use('/api/results', writeLimiter, resultRoutes);
+
+app.use('/api/queries', readLimiter, queryRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -80,10 +92,10 @@ const startServer = async () => {
     
     // Start Express server
     app.listen(PORT, () => {
-      console.log(`🚀 Server is running on port ${PORT}`);
-      console.log(`📍 API Base URL: http://localhost:${PORT}`);
-      console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
-      console.log(`📚 API Documentation: See README.md for endpoint details`);
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📍 API Base URL: http://localhost:${PORT}`);
+    console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
