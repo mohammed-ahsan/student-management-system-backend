@@ -103,8 +103,8 @@ student-management-system/
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd student-management-system
+   git clone https://github.com/mohammed-ahsan/student-management-system-backend.git
+   cd student-management-system-backend
    ```
 
 2. **Install dependencies**
@@ -123,7 +123,8 @@ student-management-system/
    
    # JWT Configuration
    JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
-   JWT_EXPIRES_IN="15m"
+   JWT_EXPIRES_IN="7d"
+   JWT_REFRESH_EXPIRES_IN=30 #in days
    
    # Server Configuration
    PORT=3000
